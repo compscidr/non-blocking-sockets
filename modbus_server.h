@@ -17,6 +17,7 @@ class modbus_server {
         std::thread listen_thread;
     public:
         modbus_server();
+        void init();
         void listen();
         void stop();
 };

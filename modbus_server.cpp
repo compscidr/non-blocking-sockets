@@ -11,6 +11,10 @@ modbus_server::modbus_server() {
     context = modbus_new_tcp("localhost", 1502);
 }
 
+void modbus_server::init() {
+
+}
+
 void modbus_server::listen() {
     listen_thread = std::thread([&]() {
       running = true;
@@ -28,6 +32,7 @@ void modbus_server::listen() {
       std::cout << "Ending listening thread" << std::endl;
     });
 }
+
 void modbus_server::stop() {
     std::cout << "stopping listening" << std::endl;
     running = false;
@@ -38,4 +43,14 @@ void modbus_server::stop() {
     std::cout << "waiting on listen_thread to stop" << std::endl;
     listen_thread.join();
     std::cout << "done stopping" << std::endl;
+}
+
+int main() {
+    modbus_server server;
+    server.init();
+    server.listen();
+    usleep(0.5e6); // without the sleep it can stop before it starts the running loop
+    std::cout << "STOPPING SERVER" << std::endl;
+    server.stop();
+    return 0;
 }

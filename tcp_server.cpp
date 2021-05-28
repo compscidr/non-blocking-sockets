@@ -2,8 +2,10 @@
 // Created by jason on 5/26/21.
 //
 #include "tcp_server.h"
+#include "tcp_client.h"
 #include <asm-generic/ioctls.h>
 #include <csignal>
+#include <cstring>
 #include <fcntl.h>
 #include <iostream>
 #include <netinet/in.h>
@@ -11,7 +13,7 @@
 #include <sys/socket.h>
 #include <unistd.h>
 
-void errExit(std::string s) {
+void tcp_server::errExit(std::string s) {
     std::cout << s << std::endl;
     exit(1);
 }
@@ -19,6 +21,9 @@ void errExit(std::string s) {
 // https://www.geeksforgeeks.org/socket-programming-cc/
 // https://www.ibm.com/docs/en/i/7.2?topic=designs-example-nonblocking-io-select
 tcp_server::tcp_server() {
+}
+
+void tcp_server::init() {
     server_socket = socket(AF_INET, SOCK_STREAM, 0);
     int opt = 1;
     if (setsockopt(server_socket, SOL_SOCKET, SO_REUSEADDR | SO_REUSEPORT, &opt, sizeof(opt)) < 0) {
@@ -85,7 +90,10 @@ void tcp_server::listen() {
         while(running) {
             int ready;
             struct timeval *pto = NULL;
-            while ((ready = select(nfds, &readfds, NULL, NULL, pto)) == -1 &&
+            // need to use a working set because after select is done, it screws up the original
+            fd_set working_set;
+            memcpy(&working_set, &readfds, sizeof(readfds));
+            while ((ready = select(nfds, &working_set, NULL, NULL, pto)) == -1 &&
                    errno == EINTR) {
                 std::cout << "L" << std::endl;
                 continue; /* Restart if interrupted by signal */
@@ -93,7 +101,7 @@ void tcp_server::listen() {
             if (ready == -1)                    /* Unexpected error */
                 errExit("select");
 
-            if (FD_ISSET(pfd[0], &readfds)) {   /* Handler was called */
+            if (FD_ISSET(pfd[0], &working_set)) {   /* Handler was called */
                 printf("A signal was caught\n");
 
                 for (;;) {                      /* Consume bytes from pipe */
@@ -110,7 +118,7 @@ void tcp_server::listen() {
                 }
             }
 
-            if (FD_ISSET(server_socket, &readfds)) {
+            if (FD_ISSET(server_socket, &working_set)) {
                 std::cout << "readfds server socket ready" << std::endl;
                 int client_socket = accept(server_socket, (struct sockaddr *)&address, (socklen_t*)&addrlen);
                 if (client_socket < 0) {
@@ -134,6 +142,7 @@ void tcp_server::handler(int sig)
     if (write(pfd[1], "x", 1) == -1 && errno != EAGAIN)
         errExit("write");
 
+    std::cout << "Wrote to pipe" << std::endl;
     errno = savedErrno;
 }
 
@@ -147,4 +156,27 @@ void tcp_server::stop() {
     raise(SIGUSR1);
     listen_thread.join();
     std::cout << "done stopping" << std::endl;
+}
+
+int main() {
+    // case 1: no connection
+    tcp_server server;
+    server.init();
+    usleep(0.5e6);
+    server.listen();
+    usleep(0.5e6);
+    std::cout << "STOPPING SERVER" << std::endl;
+    server.stop();
+
+    // case 2: connection
+    server.init();
+    usleep(0.5e6);
+    server.listen();
+    usleep(0.5e6);
+    tcp_client client;
+    client.connect("127.0.0.1", 8888);
+    std::cout << "STOPPING SERVER" << std::endl;
+    usleep(0.5e6);
+    server.stop();
+    return 0;
 }

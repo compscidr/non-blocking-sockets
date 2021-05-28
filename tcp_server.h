@@ -18,6 +18,8 @@ private:
     inline static int pfd[2]{0,0}; // https://man7.org/tlpi/code/online/dist/altio/self_pipe.c.html
 public:
     tcp_server();
+    static void errExit(std::string err);
+    void init();
     void listen();
     void stop();
     static void handler(int sig);
