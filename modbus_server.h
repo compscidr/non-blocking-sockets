@@ -15,8 +15,13 @@ class modbus_server {
         int server_socket{-1};
         std::atomic<bool> running{false};
         std::thread listen_thread;
+        fd_set readfds;
+        int nfds{0};
+        inline static int pfd[2]{0,0}; // https://man7.org/tlpi/code/online/dist/altio/self_pipe.c.html
     public:
         modbus_server();
+        static void errExit(std::string err);
+        static void handler(int sig);
         void init();
         void listen();
         void stop();
