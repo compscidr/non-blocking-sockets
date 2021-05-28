@@ -21,3 +21,8 @@ writes to the self-pipe. This triggers the `SELECT` since it is waiting on a rea
 listening loop and cleanly closes.
 
 A `stop` call can used to raise the SIGUSR1 signal to kick this off from another thread.
+
+## Three programs
+1. tcp_blocking_server: This demonstrates the problem using a tcp server
+2. tcp_server: A PoC showing the fix
+3. modbus_server: A libmodbus PoC with the fix
