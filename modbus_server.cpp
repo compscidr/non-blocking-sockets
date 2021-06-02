@@ -64,6 +64,7 @@ void modbus_server::init() {
 void modbus_server::listen() {
     listen_thread = std::thread([&]() {
       running = true;
+      int client_socket = -1;
       while (running) {
           std::cout << "WAITING FOR CONNECTION" << std::endl;
           int ready;
@@ -98,13 +99,23 @@ void modbus_server::listen() {
 
           if (FD_ISSET(server_socket, &working_set)) {
               std::cout << "readfds server socket ready" << std::endl;
-              int client_socket = modbus_tcp_accept(context, &server_socket);
+              client_socket = modbus_tcp_accept(context, &server_socket);
               if (client_socket == -1) {
                   std::cout << "Error on accept" << std::endl;
               } else {
                   std::cout << "Got connection" << std::endl;
-                  close(client_socket);
+                  FD_SET(client_socket, &readfds);
+                  nfds = std::max(nfds, client_socket + 1); /* And adjust 'nfds' if required */
+                  //close(client_socket);
               }
+          }
+
+          if (client_socket > 0 && FD_ISSET(client_socket, &working_set)) {
+              uint8_t query[MODBUS_TCP_MAX_ADU_LENGTH]{};
+              int32_t receive_size = modbus_receive(context, query);
+              std::cout << "received: " << receive_size << " bytes" << std::endl;
+              modbus_mapping_t *mapping = modbus_mapping_new(10, 10, 10, 10);
+              modbus_reply(context, query, receive_size, mapping);
           }
       }
       std::cout << "Ending listening thread" << std::endl;
@@ -140,13 +151,15 @@ void modbus_server::handler(int sig)
 int main() {
     // case 1: no connection
     modbus_server server;
-    server.init();
-    server.listen();
-    usleep(0.5e6); // without the sleep it can stop before it starts the running loop
-    std::cout << "STOPPING SERVER" << std::endl;
-    server.stop();
+//    server.init();
+//    server.listen();
+//    usleep(0.5e6); // without the sleep it can stop before it starts the running loop
+//    std::cout << "STOPPING SERVER" << std::endl;
+//    server.stop();
 
     // case 2: connection
+    std::cout << "-----------------------------" << std::endl;
+    std::cout << "STARTING AGAIN" << std::endl;
     server.init();
     server.listen();
     usleep(0.5e6); // without the sleep it can stop before it starts the running loop
@@ -157,6 +170,24 @@ int main() {
     } else {
         std::cout << "connected" << std::endl;
     }
+
+    auto result = modbus_write_bit(context, 0, true);
+    if (result == -1) {
+        std::cout << "write failed" << std::endl;
+        switch (errno) {
+            case EMBXILADD:
+                std::cout << "Address error when trying to set a coil on a modbus client" << std::endl;
+                break;
+            case EMBXILVAL:
+                std::cout << "Value error when trying to set a coil on a modbus client" << std::endl;
+                break;
+            default:
+                std::cout << "Server error when trying to set a coil on a modbus client, disconnecting: " << modbus_strerror(errno) << std::endl;
+        }
+    } else {
+        std::cout << "write success" << std::endl;
+    }
+
     modbus_free(context);
     std::cout << "STOPPING SERVER" << std::endl;
     server.stop();
