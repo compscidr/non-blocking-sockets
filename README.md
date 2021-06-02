@@ -1,4 +1,4 @@
-# Non blocking multi-threaded sockets
+# Non-blocking shutdown of tcp and modbus sockets in c/c++
 This PoC project was motivated by some work we were doing with the libmodbus-dev library. 
 
 We were creating a server which was doing listen / accept in a thread, and wanting to cleanly shut it down. Once the `accept` call is reached, from what I can
@@ -14,11 +14,15 @@ This PoC shows how it can be cleanly shutdown using both tcp and modbus sockets.
 ## self pipe, select approach
 There are a few approaches which could be taken, however this one uses low cpu (doesn't poll, doesn't require timeouts).
 
-The approach I'm using is to set the sockets into non-blocking mode, and use `SELECT` to monitor groups of file descriptors which are ready to
-read (accept) and write. 
+The approach I'm using is to ~~set the sockets into non-blocking mode and~~ (not necessary, and didn't work with libmodbus) use `SELECT` to monitor groups of file descriptors which are ready to read (accept) and write. 
 
 A self-pipe is used, and added to the read descriptors. A signal handler is registered to the `SIGUSR1` signal. When this signal is received, it
 writes to the self-pipe. This triggers the `SELECT` since it is waiting on a read from the pipe + the server socket. It then breaks out of its
 listening loop and cleanly closes.
 
 A `stop` call can used to raise the SIGUSR1 signal to kick this off from another thread.
+
+## Three programs
+1. tcp_blocking_server: This demonstrates the problem using a tcp server
+2. tcp_server: A PoC showing the fix
+3. modbus_server: A libmodbus PoC with the fix
